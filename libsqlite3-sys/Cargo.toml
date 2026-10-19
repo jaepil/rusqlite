@@ -1,9 +1,9 @@
 [package]
-name = "libsqlite3-sys"
-version = "0.37.0"
+name = "uqa-libsqlite3-sys"
+version = "0.37.1"
 authors = ["The rusqlite developers"]
 edition = "2021"
-repository = "https://github.com/rusqlite/rusqlite"
+repository = "https://github.com/jaepil/rusqlite"
 description = "Native bindings to the libsqlite3 library"
 license = "MIT"
 links = "sqlite3"

@@ -1,3 +1,17 @@
+# UQA-managed rusqlite
+
+This fork publishes `uqa-rusqlite` 0.39.1 and `uqa-libsqlite3-sys` 0.37.1 for [UQA Engine issue #348](https://github.com/cognica-io/uqa-engine/issues/348). The Rust API and bundled SQLite/SQLCipher sources are taken from upstream rusqlite 0.39.0 (`2a1790a69107cd03dae85d501dcbdb11c5b32ef3`). The sole native build correction removes the default `SQLITE_ENABLE_MEMORY_MANAGEMENT` define, as in upstream [f31f7324](https://github.com/rusqlite/rusqlite/commit/f31f7324a82894be13e5de1665cb9af45dc5f869). SQLite otherwise puts all connections' page caches behind one global mutex. SQLCipher encryption, connection-local memory reclamation, SQLite source versions and database formats are unchanged.
+
+Use the maintained package through the existing library name:
+
+```toml
+rusqlite = { package = "uqa-rusqlite", version = "=0.39.1", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
+```
+
+For Emscripten, use `bundled,blob,cache` instead of SQLCipher. Native dependencies all need to agree on this fork: official `libsqlite3-sys` and `uqa-libsqlite3-sys` both own `links = "sqlite3"` and cannot coexist in one dependency graph. Rename any direct rusqlite dependency as above; dependencies that require the official package must also be updated. A Cargo alias preserves imports, but does not make distinct package types interchangeable. Upstream `rusqlite-macros` 0.4.2 remains a registry dependency.
+
+The managed workflow runs the bundled SQLite and SQLCipher library tests on Linux and macOS, verifies Emscripten build options, encryption/reopen behavior and source provenance, and builds both registry archives before publishing either. Normal `uqa-v*` tag pushes publish the verified packages in dependency order. No local or manually dispatched publication is used. The upstream MIT license and notices remain intact. The upstream usage and feature reference follows.
+
 # Rusqlite
 
 [![Latest Version](https://img.shields.io/crates/v/rusqlite.svg)](https://crates.io/crates/rusqlite)
