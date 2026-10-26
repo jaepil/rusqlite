@@ -1,16 +1,18 @@
 # UQA-managed rusqlite
 
-This fork publishes `uqa-rusqlite` 0.39.1 and `uqa-libsqlite3-sys` 0.37.1 for [UQA Engine issue #348](https://github.com/cognica-io/uqa-engine/issues/348). The Rust API and bundled SQLite/SQLCipher sources are taken from upstream rusqlite 0.39.0 (`2a1790a69107cd03dae85d501dcbdb11c5b32ef3`). The sole native build correction removes the default `SQLITE_ENABLE_MEMORY_MANAGEMENT` define, as in upstream [f31f7324](https://github.com/rusqlite/rusqlite/commit/f31f7324a82894be13e5de1665cb9af45dc5f869). SQLite otherwise puts all connections' page caches behind one global mutex. SQLCipher encryption, connection-local memory reclamation, SQLite source versions and database formats are unchanged.
+This fork publishes `uqa-rusqlite` 0.39.2 and `uqa-libsqlite3-sys` 0.37.2. The Rust wrapper API and plain bundled SQLite 3.50.4 retain upstream rusqlite 0.39.0 (`2a1790a69107cd03dae85d501dcbdb11c5b32ef3`). Bundled SQLCipher is updated from 4.10.0 to the official [4.19.0 release](https://github.com/sqlcipher/sqlcipher/releases/tag/v4.19.0), based on SQLite 3.53.4. This includes SQLCipher's corrected extension callback type and subsequent upstream fixes. The amalgamation, headers, Rust bindings and SQLCipher license are regenerated from pinned commit `c4b275a47932888216bade83aff2bbc73df0ff85`; no local SQLCipher patch is applied.
+
+The native build configuration retains the removal of `SQLITE_ENABLE_MEMORY_MANAGEMENT`, originally delivered for [UQA Engine issue #348](https://github.com/cognica-io/uqa-engine/issues/348) and matching upstream [f31f7324](https://github.com/rusqlite/rusqlite/commit/f31f7324a82894be13e5de1665cb9af45dc5f869). This keeps connection page caches outside SQLite's optional global memory-management mutex. SQLCipher encryption and connection-local memory reclamation remain enabled.
 
 Use the maintained package through the existing library name:
 
 ```toml
-rusqlite = { package = "uqa-rusqlite", version = "=0.39.1", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
+rusqlite = { package = "uqa-rusqlite", version = "=0.39.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
 ```
 
 For Emscripten, use `bundled,blob,cache` instead of SQLCipher. Native dependencies all need to agree on this fork: official `libsqlite3-sys` and `uqa-libsqlite3-sys` both own `links = "sqlite3"` and cannot coexist in one dependency graph. Rename any direct rusqlite dependency as above; dependencies that require the official package must also be updated. A Cargo alias preserves imports, but does not make distinct package types interchangeable. Upstream `rusqlite-macros` 0.4.2 remains a registry dependency.
 
-The managed workflow runs the bundled SQLite and SQLCipher library tests on Linux and macOS, verifies Emscripten build options, encryption/reopen behavior and source provenance, and builds both registry archives before publishing either. Normal `uqa-v*` tag pushes publish the verified packages in dependency order. No local or manually dispatched publication is used. The upstream MIT license and notices remain intact. The upstream usage and feature reference follows.
+The managed workflow runs bundled SQLite and SQLCipher library tests on Linux, macOS and Windows, verifies Emscripten build options, reproduces the official SQLCipher release sources, and builds both registry archives before publishing either. Linux and macOS instrument the complete SQLCipher amalgamation with ASan/UBSan and check encrypted-file interoperability with 4.10.0, live WAL reads, rollback, export and rekey. OpenSSL is not instrumented by this dependency-level test; UQA separately qualifies its complete library with its approved OpenSSL-only function-check exception. Normal `uqa-v*` tag pushes publish the verified packages in dependency order. No local or manually dispatched publication is used. The upstream MIT license and notices remain intact. The upstream usage and feature reference follows.
 
 # Rusqlite
 

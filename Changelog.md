@@ -1,3 +1,7 @@
+# UQA 0.39.2 / native bindings 0.37.2
+
+Update bundled SQLCipher from 4.10.0 (SQLite 3.50.4) to the official 4.19.0 release (SQLite 3.53.4), including the corrected extension callback type and subsequent upstream fixes. Regenerate the amalgamation, public headers, native bindings and license from the pinned release. The Rust wrapper API, plain SQLite bundle and per-connection page-cache build configuration remain unchanged. Add reproducible source checks and encrypted-file interoperability with 4.10.0 under complete SQLCipher ASan/UBSan instrumentation. Publication and UQA adoption require the completed automatic platform checks.
+
 For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlite/releases) page.
 
 # Version 0.14.0 (2018-08-17)

@@ -3,6 +3,7 @@ name: UQA SQLite packages
 on:
   pull_request:
     branches: [main]
+    types: [ready_for_review]
   push:
     tags: ["uqa-v*"]
 
@@ -20,14 +21,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  source:
+    name: Reproduce official SQLCipher release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: sqlcipher/sqlcipher
+          ref: c4b275a47932888216bade83aff2bbc73df0ff85
+          path: target/sqlcipher-upstream
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Regenerate amalgamation, headers, license and Rust bindings
+        run: python3 verification/update_sqlcipher.py --source target/sqlcipher-upstream --check
+      - name: Verify unchanged Rust APIs and plain SQLite
+        run: python3 verification/provenance.py
+
   native:
     name: SQLite and SQLCipher (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,14 +67,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-bin: false
+      - uses: ilammy/setup-nasm@v1
+        if: runner.os == 'Windows'
       - name: Verify pinned upstream source and build correction
         run: python3 verification/provenance.py
       - name: Test bundled SQLite and SQLCipher with the UQA features
+        shell: python
         run: |
-          for backend in bundled bundled-sqlcipher-vendored-openssl; do
-            cargo test -p uqa-rusqlite --locked --lib --no-default-features --features "$backend,blob,cache,functions"
-            cargo run -p uqa-rusqlite --locked --example uqa_build_options --no-default-features --features "$backend,blob,cache"
-          done
+          import subprocess
+          for backend in ('bundled', 'bundled-sqlcipher-vendored-openssl'):
+              subprocess.run(['cargo', 'test', '-p', 'uqa-rusqlite', '--locked', '--lib', '--no-default-features', '--features', backend + ',blob,cache,functions,hooks'], check=True)
+              subprocess.run(['cargo', 'run', '-p', 'uqa-rusqlite', '--locked', '--example', 'uqa_build_options', '--no-default-features', '--features', backend + ',blob,cache'], check=True)
+      - name: Select Clang with ARM64 function-pointer instrumentation
+        if: runner.os == 'macOS'
+        run: |
+          if ! brew list --versions llvm@22 >/dev/null 2>&1; then
+            brew install llvm@22
+          fi
+          echo "$(brew --prefix llvm@22)/bin" >> "$GITHUB_PATH"
+      - name: Verify encrypted-file interoperability and complete SQLCipher sanitizers
+        if: runner.os != 'Windows'
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          import subprocess
+          output = subprocess.check_output(['cargo', 'build', '-p', 'uqa-rusqlite', '--locked', '--example', 'uqa_build_options', '--no-default-features', '--features', 'bundled-sqlcipher-vendored-openssl,blob,cache', '--message-format=json'], text=True)
+          native = [item for line in output.splitlines() if (item := json.loads(line))['reason'] == 'build-script-executed' and '#openssl-sys@' in item['package_id']]
+          assert len(native) == 1, native
+          installation = Path(native[0]['out_dir']) / 'openssl-build/install'
+          subprocess.run(['python3', 'verification/sqlcipher_native.py', '--openssl', str(installation)], check=True)
       - name: Build both package archives before publication
         run: |
           cargo package -p uqa-libsqlite3-sys -p uqa-rusqlite --locked --features bundled-sqlcipher-vendored-openssl
@@ -56,6 +105,12 @@ jobs:
         with:
           name: sqlite-packages-${{ matrix.os }}
           path: target/package/*.crate
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os != 'Windows'
+        with:
+          name: sqlcipher-qualification-${{ matrix.os }}
+          path: target/sqlcipher-verification
           if-no-files-found: error
 
   emscripten:
@@ -86,7 +141,7 @@ jobs:
 
   publish:
     name: Publish verified SQLite packages
-    needs: [native, emscripten]
+    needs: [source, native, emscripten]
     if: github.repository == 'jaepil/rusqlite' && startsWith(github.ref, 'refs/tags/uqa-v')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -106,7 +161,7 @@ jobs:
       - name: Verify tag and the tested archives
         run: |
           python3 verification/provenance.py --archives target/package
-          test "$GITHUB_REF_NAME" = uqa-v0.39.1
+          test "$GITHUB_REF_NAME" = uqa-v0.39.2
       - name: Publish verified dependencies in order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -127,7 +182,7 @@ jobs:
           default = ["bundled-sqlcipher"]
           bundled-sqlcipher = []
           [dependencies]
-          rusqlite = { package = "uqa-rusqlite", version = "=0.39.1", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
+          rusqlite = { package = "uqa-rusqlite", version = "=0.39.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
           tempfile = "3"
           TOML
           cargo run --manifest-path "$RUNNER_TEMP/sqlite-consumer/Cargo.toml"

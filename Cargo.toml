@@ -1,7 +1,7 @@
 [package]
 name = "uqa-rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.39.1"
+version = "0.39.2"
 authors = ["The rusqlite developers"]
 edition = "2021"
 description = "UQA-maintained rusqlite with per-connection bundled page caches"
@@ -174,7 +174,7 @@ smallvec = "1.6.1"
 rusqlite-macros = { version = "0.4.2", optional = true }
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
-libsqlite3-sys = { package = "uqa-libsqlite3-sys", path = "libsqlite3-sys", version = "=0.37.1" }
+libsqlite3-sys = { package = "uqa-libsqlite3-sys", path = "libsqlite3-sys", version = "=0.37.2" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 sqlite-wasm-rs = { version = "0.5.1", default-features = false }
