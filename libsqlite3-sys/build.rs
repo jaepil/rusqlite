@@ -146,6 +146,8 @@ mod build_bundled {
             cfg.flag("-DSQLITE_HAS_CODEC")
                 .flag("-DSQLITE_TEMP_STORE=2")
                 .flag("-DSQLITE_EXTRA_INIT=sqlcipher_extra_init")
+                .flag("-DSQLITE_EXTRA_INIT_MUTEXED=sqlcipher_extra_init")
+                .flag("-DSQLITE_EXTRA_AUTOEXT=sqlcipher_extra_autoext")
                 .flag("-DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown")
                 .flag("-DHAVE_STDINT_H=1");
 

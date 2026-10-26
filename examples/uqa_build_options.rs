@@ -19,6 +19,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     #[cfg(all(feature = "bundled-sqlcipher", not(target_os = "emscripten")))]
     {
+        let serialized: i64 = connection.query_row(
+            "SELECT sqlite_compileoption_used('EXTRA_INIT_MUTEXED=sqlcipher_extra_init')",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(
+            serialized, 1,
+            "crypto initialization must precede publication"
+        );
+        let export_functions: i64 = connection.query_row(
+            "SELECT count(*) FROM pragma_function_list WHERE name = 'sqlcipher_export'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(export_functions, 1, "each connection must register export");
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("encrypted.db");
         {

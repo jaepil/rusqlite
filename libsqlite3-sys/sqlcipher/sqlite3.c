@@ -111235,10 +111235,19 @@ static void (*const sqlcipher_fini_func)(void) __attribute__((used, section(".fi
 
 static void sqlcipher_exportFunc(sqlite3_context*, int, sqlite3_value**);
 
+#ifdef SQLITE_EXTRA_INIT_MUTEXED
+#ifndef SQLITE_EXTRA_AUTOEXT
+#error "Mutexed SQLCipher initialization requires SQLITE_EXTRA_AUTOEXT=sqlcipher_extra_autoext"
+#endif
+int sqlcipher_extra_autoext(sqlite3* db) {
+  return sqlite3_create_function_v2(db, "sqlcipher_export", -1, SQLITE_UTF8, 0, sqlcipher_exportFunc, 0, 0, 0);
+}
+#else
 static int sqlcipher_export_init(sqlite3* db, char** errmsg, const struct sqlite3_api_routines* api) {
   sqlite3_create_function_v2(db, "sqlcipher_export", -1, SQLITE_UTF8, 0, sqlcipher_exportFunc, 0, 0, 0);
   return SQLITE_OK;
 }
+#endif
 
 #if defined (SQLCIPHER_CRYPTO_CC)
 #define SQLCIPHER_PROVIDER_SETUP sqlcipher_cc_setup
@@ -111265,12 +111274,15 @@ int sqlcipher_extra_init(const char* arg) {
   int mutex_held = 0;
   sqlcipher_provider *provider = NULL;
 
+#ifndef SQLITE_EXTRA_INIT_MUTEXED
+  /* The mutexed hook already owns SQLite's recursive initialization mutex. */
   sqlite3_mutex_enter(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
   mutex_held = 1;
+#endif
 
   if(sqlcipher_init) {
     /* if this init routine already completed successfully return immediately */
-    sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
+    if(mutex_held) sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
     return SQLITE_OK;
   }
 
@@ -111395,11 +111407,13 @@ int sqlcipher_extra_init(const char* arg) {
   sqlcipher_shutdown = 0;
 
   /* leave the master mutex so we can proceed with auto extension registration */
-  sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
+  if(mutex_held) sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
 
+#ifndef SQLITE_EXTRA_INIT_MUTEXED
   /* finally, extension registration occurs outside of the mutex because it is
    * uses SQLITE_MUTEX_STATIC_MASTER itself */
   sqlite3_auto_extension((void (*)(void))sqlcipher_export_init);
+#endif
 
   return SQLITE_OK;
 

@@ -8,10 +8,16 @@
   "rust_toolchain": "1.95.0",
   "bindgen_target": "x86_64-unknown-linux-gnu",
   "sha256": {
-    "sqlite3.c": "8640c653acadf665cce6331646f60b5b74a4690746f2c4a2d8f688a0570a0c0c",
+    "sqlite3.c": "72fb870f203807ac89d087a1287f69fc992619182bf67755fb36955f3b4264d8",
     "sqlite3.h": "8a9d1bff44d75174ca6dea3ea9bac50a6104d86facb566647b8bb839375b7b3a",
     "sqlite3ext.h": "ac9645e5c9ff0cf176efdd6e75cb5e98f46295d38e02db5c4d208826a39ab4be",
     "bindgen_bundled_version.rs": "ce38906a468f4b67913fbddf75bbc3fdd38aada48ad4285827d595cf7034abee",
     "LICENSE": "2a2826f6acf46fa650730cf42cbb22a642be33a7ef119c9c4f4bf6daf3bef48e"
-  }
+  },
+  "patches": [
+    {
+      "file": "patches/sqlcipher-initialization.patch",
+      "sha256": "8f6d0d472e483c6671b0cd9eba4525ed3eeb6b8b5ec4eaf4737acef81a8586b0"
+    }
+  ]
 }

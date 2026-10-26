@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +33,21 @@ def regenerate(source, check):
     if (source / 'VERSION').read_text().strip() != metadata['sqlite_version']:
         raise ValueError('Unexpected upstream SQLite version')
     with tempfile.TemporaryDirectory(prefix='uqa-sqlcipher-') as directory:
-        build = Path(directory)
+        temporary = Path(directory)
+        archive = temporary / 'upstream.tar'
+        with archive.open('wb') as output:
+            subprocess.run(['git', 'archive', 'HEAD'], cwd=source, stdout=output, check=True)
+        prepared = temporary / 'source'
+        with tarfile.open(archive) as upstream:
+            upstream.extractall(prepared, filter='data')
+        for patch in metadata['patches']:
+            path = ROOT / 'verification' / patch['file']
+            if hashlib.sha256(path.read_bytes()).hexdigest() != patch['sha256']:
+                raise ValueError(f'Unreviewed SQLCipher patch: {path.name}')
+            subprocess.run(['git', 'apply', '--check', str(path)], cwd=prepared, check=True)
+            subprocess.run(['git', 'apply', str(path)], cwd=prepared, check=True)
+        build = temporary / 'build'
+        build.mkdir()
         env = os.environ.copy()
         for name in ('CFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'LDFLAGS'):
             env[name] = ''
@@ -40,7 +55,7 @@ def regenerate(source, check):
         env['RUSTUP_TOOLCHAIN'] = metadata['rust_toolchain']
         env['RUSTFMT'] = subprocess.check_output(
             ['rustup', 'which', '--toolchain', metadata['rust_toolchain'], 'rustfmt'], text=True).strip()
-        run([str(source / 'configure'), '--disable-tcl'], build, env, build / 'configure.log')
+        run([str(prepared / 'configure'), '--disable-tcl'], build, env, build / 'configure.log')
         run(['make', '-j2', 'sqlite3.c'], build, env, build / 'amalgamation.log')
         env.update({
             'LIBSQLITE3_SYS_BUNDLING': '1',
