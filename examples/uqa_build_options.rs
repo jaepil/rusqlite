@@ -26,7 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             connection.execute_batch("PRAGMA key = 'verification-only'; CREATE TABLE proof(value INTEGER); INSERT INTO proof VALUES (42)")?;
             let version: String =
                 connection.query_row("PRAGMA cipher_version", [], |row| row.get(0))?;
-            assert!(!version.is_empty());
+            assert_eq!(version, "4.19.0 community");
+            assert_eq!(rusqlite::version(), "3.53.4");
             connection.release_memory()?;
             println!("SQLCipher {version}: local cache reclamation passed");
         }

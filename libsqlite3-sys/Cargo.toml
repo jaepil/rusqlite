@@ -1,6 +1,6 @@
 [package]
 name = "uqa-libsqlite3-sys"
-version = "0.37.1"
+version = "0.37.2"
 authors = ["The rusqlite developers"]
 edition = "2021"
 repository = "https://github.com/jaepil/rusqlite"
