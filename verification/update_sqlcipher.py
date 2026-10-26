@@ -1,5 +1,6 @@
 """Regenerate bundled SQLCipher from the exact reviewed upstream release."""
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -36,6 +37,9 @@ def regenerate(source, check):
         for name in ('CFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'LDFLAGS'):
             env[name] = ''
         env['CCACHE'] = 'none'
+        env['RUSTUP_TOOLCHAIN'] = metadata['rust_toolchain']
+        env['RUSTFMT'] = subprocess.check_output(
+            ['rustup', 'which', '--toolchain', metadata['rust_toolchain'], 'rustfmt'], text=True).strip()
         run([str(source / 'configure'), '--disable-tcl'], build, env, build / 'configure.log')
         run(['make', '-j2', 'sqlite3.c'], build, env, build / 'amalgamation.log')
         env.update({
@@ -65,7 +69,10 @@ def regenerate(source, check):
         if check:
             for name, data in generated.items():
                 if (DESTINATION / name).read_bytes() != data:
-                    raise ValueError(f'Bundled {name} differs from regenerated official source')
+                    difference = ''.join(difflib.unified_diff(
+                        (DESTINATION / name).read_text().splitlines(keepends=True),
+                        data.decode().splitlines(keepends=True), fromfile='bundled/' + name, tofile='generated/' + name))
+                    raise ValueError(f'Bundled {name} differs from regenerated official source:\n{difference}')
             if metadata['sha256'] != hashes:
                 raise ValueError('Generated source hashes differ from the provenance manifest')
         else:
