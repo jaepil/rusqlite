@@ -9,7 +9,7 @@ import tomllib
 
 BASE = '2a1790a69107cd03dae85d501dcbdb11c5b32ef3'
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGES = [('uqa-libsqlite3-sys', '0.37.2', 'libsqlite3-sys'), ('uqa-rusqlite', '0.39.2', '.')]
+PACKAGES = [('uqa-libsqlite3-sys', '0.37.3', 'libsqlite3-sys'), ('uqa-rusqlite', '0.39.3', '.')]
 
 
 def verify():
@@ -23,6 +23,9 @@ def verify():
     sqlcipher = json.loads((ROOT / 'verification/sqlcipher.json').read_text())
     assert sqlcipher['tag'] == 'v4.19.0'
     assert sqlcipher['commit'] == 'c4b275a47932888216bade83aff2bbc73df0ff85'
+    assert [patch['file'] for patch in sqlcipher['patches']] == ['patches/sqlcipher-initialization.patch']
+    for patch in sqlcipher['patches']:
+        assert hashlib.sha256((ROOT / 'verification' / patch['file']).read_bytes()).hexdigest() == patch['sha256']
     assert set(sqlcipher['sha256']) == {'sqlite3.c', 'sqlite3.h', 'sqlite3ext.h', 'bindgen_bundled_version.rs', 'LICENSE'}
     for name, digest in sqlcipher['sha256'].items():
         assert hashlib.sha256((ROOT / 'libsqlite3-sys/sqlcipher' / name).read_bytes()).hexdigest() == digest, name
@@ -31,10 +34,15 @@ def verify():
     upstream = subprocess.check_output(['git', 'show', f'{BASE}:libsqlite3-sys/build.rs'], cwd=ROOT)
     define = b'            .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")\n'
     assert upstream.count(define) == 1
-    assert (ROOT / 'libsqlite3-sys/build.rs').read_bytes() == upstream.replace(define, b'')
+    initialization = b'                .flag("-DSQLITE_EXTRA_INIT=sqlcipher_extra_init")\n'
+    serialized = b'                .flag("-DSQLITE_EXTRA_INIT_MUTEXED=sqlcipher_extra_init")\n'
+    builtin = b'                .flag("-DSQLITE_EXTRA_AUTOEXT=sqlcipher_extra_autoext")\n'
+    assert upstream.count(initialization) == 1
+    expected = upstream.replace(define, b'').replace(initialization, initialization + serialized + builtin)
+    assert (ROOT / 'libsqlite3-sys/build.rs').read_bytes() == expected
     root_manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text())
     native = root_manifest['target']['cfg(not(all(target_family = "wasm", target_os = "unknown")))']['dependencies']['libsqlite3-sys']
-    assert native['package'] == 'uqa-libsqlite3-sys' and native['version'] == '=0.37.2'
+    assert native['package'] == 'uqa-libsqlite3-sys' and native['version'] == '=0.37.3'
     assert root_manifest['dependencies']['rusqlite-macros'] == {'version': '0.4.2', 'optional': True}
 
 

@@ -22,7 +22,7 @@ env:
 
 jobs:
   source:
-    name: Reproduce official SQLCipher release
+    name: Reproduce pinned SQLCipher source and initialization patch
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -161,7 +161,7 @@ jobs:
       - name: Verify tag and the tested archives
         run: |
           python3 verification/provenance.py --archives target/package
-          test "$GITHUB_REF_NAME" = uqa-v0.39.2
+          test "$GITHUB_REF_NAME" = uqa-v0.39.3
       - name: Publish verified dependencies in order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -182,7 +182,7 @@ jobs:
           default = ["bundled-sqlcipher"]
           bundled-sqlcipher = []
           [dependencies]
-          rusqlite = { package = "uqa-rusqlite", version = "=0.39.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
+          rusqlite = { package = "uqa-rusqlite", version = "=0.39.3", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "blob", "cache"] }
           tempfile = "3"
           TOML
           cargo run --manifest-path "$RUNNER_TEMP/sqlite-consumer/Cargo.toml"

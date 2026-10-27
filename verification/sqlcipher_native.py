@@ -26,15 +26,19 @@ def run(command, **kwargs):
     subprocess.run([str(part) for part in command], check=True, **kwargs)
 
 
-def compile_library(source, output, args, instrumented):
+def compile_library(source, output, args, instrumented, mutexed=False):
     flags = ['-g', '-O1', '-fno-omit-frame-pointer']
     if instrumented:
         flags += ['-fsanitize=address,undefined', '-fno-sanitize-recover=all']
+    if mutexed:
+        flags += ['-DSQLITE_EXTRA_INIT_MUTEXED=sqlcipher_extra_init',
+                  '-DSQLITE_EXTRA_AUTOEXT=sqlcipher_extra_autoext']
     run([args.cc, '-std=c11', *flags, *(f'-D{value}' for value in DEFINES),
          '-I', args.openssl / 'include', '-c', source / 'sqlite3.c', '-o', output])
 
 
-def compile_client(source, library, output, args, language, instrumented):
+def compile_client(source, library, output, args, language, instrumented,
+                   fixture='sqlcipher.c'):
     flags = ['-g', '-O1', '-Wall', '-Wextra', '-Werror', '-fno-omit-frame-pointer']
     if instrumented:
         flags += ['-fsanitize=address,undefined', '-fno-sanitize-recover=all']
@@ -45,7 +49,7 @@ def compile_client(source, library, output, args, language, instrumented):
         raise ValueError('An existing static OpenSSL installation is required')
     client = output.with_suffix('.o')
     run([compiler, '-x', language, '-std=c11' if language == 'c' else '-std=c++17', *flags,
-         '-DSQLITE_HAS_CODEC', '-I', source, '-c', ROOT / 'verification/sqlcipher.c', '-o', client])
+         '-DSQLITE_HAS_CODEC', '-I', source, '-c', ROOT / 'verification' / fixture, '-o', client])
     run([compiler, *flags, client, library, crypto, '-lpthread', '-ldl', '-lm', '-o', output])
 
 
@@ -106,7 +110,23 @@ def verify(args):
         new_source = ROOT / 'libsqlite3-sys/sqlcipher'
         for name, source, instrumented in (('old', old_source, False), ('old-sanitized', old_source, True),
                                            ('new-sanitized', new_source, True)):
-            compile_library(source, work / f'{name}.o', args, instrumented)
+            compile_library(source, work / f'{name}.o', args, instrumented,
+                            mutexed=source == new_source)
+        compile_library(new_source, work / 'unserialized.o', args, False)
+        for name, library, instrumented in (
+                ('unserialized', work / 'unserialized.o', False),
+                ('serialized', work / 'new-sanitized.o', True)):
+            executable = work / f'initialization-{name}'
+            compile_client(new_source, library, executable, args, 'c', instrumented,
+                           fixture='sqlcipher_initialization.c')
+            result = subprocess.run([str(executable)], env=env, capture_output=True,
+                                    text=True, timeout=30)
+            (args.output / f'initialization-{name}.log').write_text(result.stdout + result.stderr)
+            if name == 'unserialized':
+                if result.returncode != 1 or 'key before initializing thread returns: rc=1' not in result.stdout:
+                    raise ValueError('The original initialization publication defect was not detected')
+            elif result.returncode != 0 or 'passed across three lifetimes' not in result.stdout:
+                raise ValueError('Serialized crypto/extension initialization failed: ' + result.stdout + result.stderr)
         old = work / 'old-client'
         compile_client(old_source, work / 'old.o', old, args, 'c', False)
         results = []
@@ -130,7 +150,11 @@ def verify(args):
         summary = {'original_sha256': old_hash,
                    'updated_sha256': hashlib.sha256((new_source / 'sqlite3.c').read_bytes()).hexdigest(),
                    'compiler': subprocess.check_output([args.cc, '--version'], text=True).splitlines()[0],
-                   'openssl_instrumented': False, 'results': results}
+                   'openssl_instrumented': False,
+                   'initialization_publication': {'original_defect_detected': True,
+                                                  'serialized_crypto_and_extension': True,
+                                                  'verified_lifetimes': 3},
+                   'results': results}
         (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps(summary, indent=2))
 
